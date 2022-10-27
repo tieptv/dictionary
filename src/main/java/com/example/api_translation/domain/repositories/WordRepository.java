@@ -6,5 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface WordRepository extends MongoRepository<Word, String> {
-    Word findByWord(String word);
+    Word findBySourceLangAndTargetLangAndWord(String source, String target, String word);
 }

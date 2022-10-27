@@ -1,8 +1,9 @@
 package com.example.api_translation.domain.entities;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoId;
 
@@ -11,16 +12,21 @@ import java.util.Date;
 @Document(collection = "words")
 @Data
 @Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class Word {
 
     @MongoId
     private String id;
 
+    private String sourceLang;
+
+    private String targetLang;
+
     private String word;
 
     private String content;
 
-    @JsonFormat(pattern = "YYYY-MM-dd HH:mm:ss")
-    private Date createdAt;
+    private Date createdAt = new Date();
 
 }
