@@ -1,9 +1,9 @@
 package com.example.api_translation.domain.services.impl;
 
+import com.example.api_translation.app.dtos.WordDTO;
 import com.example.api_translation.app.response.WordResponse;
 import com.example.api_translation.domain.entities.Word;
 import com.example.api_translation.domain.exceptions.BusinessException;
-import com.example.api_translation.domain.exceptions.ErrorMessage;
 import com.example.api_translation.domain.repositories.WordRepository;
 import com.example.api_translation.domain.services.WordService;
 import org.modelmapper.ModelMapper;
@@ -15,6 +15,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @Service
 public class WordServiceImpl implements WordService {
@@ -32,20 +34,34 @@ public class WordServiceImpl implements WordService {
     private String apiTranslation;
 
     @Override
-    public WordResponse getWord(String sourceLang, String targetLang, String word) {
+    public Mono<WordResponse> getWord(WordDTO dto) {
         ModelMapper modelMapper = new ModelMapper();
-        Word w = wordRepository.findBySourceLangAndTargetLangAndWord(sourceLang, targetLang,word);
-        if (w == null) {
-            String content = getContent(sourceLang, targetLang, word);
-            w = Word.builder().word(word).sourceLang(sourceLang)
-                    .targetLang(targetLang).content(content).build();
-            w = wordRepository.save(w);
-        }
+        Mono<Word> w = wordRepository.
+                findBySourceLangAndTargetLangAndWord(dto.getSourceLang(), dto.getTargetLang(), dto.getWord())
+                .switchIfEmpty(Mono.defer(() -> {
+                    Object content = getContent(dto.getSourceLang(), dto.getTargetLang(), dto.getWord());
+                    Word word = Word.builder().word(dto.getWord()).sourceLang(dto.getSourceLang())
+                            .targetLang(dto.getTargetLang()).content(content).build();
 
-        return modelMapper.map(w, WordResponse.class);
+                    return wordRepository.save(word);
+                }));
+        return w.map(item -> {
+            WordResponse wordResponse = modelMapper.map(item, WordResponse.class);
+            return wordResponse;
+        });
     }
 
-    private String getContent(String sourceLang, String targetLang, String word) {
+    @Override
+    public Flux<WordResponse> findAll() {
+        ModelMapper modelMapper = new ModelMapper();
+        Flux<Word> allWord = wordRepository.findAll();
+        return allWord.map(item  -> {
+            WordResponse wordResponse = modelMapper.map(item, WordResponse.class);
+            return wordResponse;
+        });
+    }
+
+    private Object getContent(String sourceLang, String targetLang, String word) {
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept", "application/json");
@@ -53,12 +69,13 @@ public class WordServiceImpl implements WordService {
         headers.set("app_key", applicationKey);
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
-        String url = apiTranslation + sourceLang + "/" + targetLang + "/" + word;
+        String url = apiTranslation.replace("{sourceLang}", sourceLang)
+                .replace("{targetLang}", targetLang).replace("{word}", word);
         try {
-            return restTemplate.exchange(url, HttpMethod.GET, entity, String.class).getBody();
+            return restTemplate.exchange(url, HttpMethod.GET, entity, Object.class).getBody();
         } catch(Exception e) {
             e.printStackTrace();
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, ErrorMessage.WORD_NOT_FOUND);
+            throw new BusinessException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
 
     }

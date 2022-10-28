@@ -9,6 +9,6 @@ public class WordResponse {
 
     private String word;
 
-    private String content;
+    private Object content;
 
 }

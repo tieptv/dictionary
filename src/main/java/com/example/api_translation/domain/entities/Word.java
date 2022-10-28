@@ -25,7 +25,7 @@ public class Word {
 
     private String word;
 
-    private String content;
+    private Object content;
 
     private Date createdAt = new Date();
 
