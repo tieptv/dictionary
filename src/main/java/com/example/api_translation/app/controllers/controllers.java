@@ -19,4 +19,9 @@ public class controllers {
     @RequestParam("target") String targetLang) {
         return wordService.getWord(sourceLang, targetLang,  word);
     }
+
+    @GetMapping("/proxy")
+    public String check() {
+        return wordService.checkProxy();
+    }
 }
