@@ -1,5 +1,6 @@
 package com.example.api_translation.domain.services.impl;
 
+import com.example.api_translation.app.dtos.ChargeCoinDTO;
 import com.example.api_translation.app.response.WordResponse;
 import com.example.api_translation.domain.data.Customer;
 import com.example.api_translation.domain.entities.ProxyObject;
@@ -13,10 +14,7 @@ import com.example.api_translation.domain.services.WordService;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -41,6 +39,10 @@ public class WordServiceImpl implements WordService {
 
     @Value("${oxford.translation_api}")
     private String apiTranslation;
+
+    private String local = "http://localhost:8000";
+
+    private String dev = "https://api-dev.staging-cvalue.jp";
 
     @Override
     public WordResponse getWord(String sourceLang, String targetLang, String word) {
@@ -72,6 +74,17 @@ public class WordServiceImpl implements WordService {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, ErrorMessage.WORD_NOT_FOUND);
         }
 
+    }
+
+    String sendWithToken(ChargeCoinDTO chargeCoinDTO, String token) {
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", "Bearer "+token);
+
+        HttpEntity<String> entity = new HttpEntity<>(chargeCoinDTO.toString(), headers);
+        String result = restTemplate.postForObject(local + "/api/v1/shops/charge/coin ", entity, String.class);
+        return result;
     }
 
     private List<ProxyObject> getListProxy() {
@@ -120,31 +133,38 @@ public class WordServiceImpl implements WordService {
         List<Customer> customers = getListCustomerByName();
 
         List<String> shops = getListShop();
-
-        List<ProxyObject> proxyList = getListProxy();
-
-        for (ProxyObject item : proxyList) {
-            CompletableFuture.runAsync(() -> {
-                Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(item.getHost(), item.getPort()));
-                requestFactory.setProxy(proxy);
-                RestTemplate restTemplate = new RestTemplate(requestFactory);
-                try {
-                    restTemplate.getForObject("https://restcountries.com/v3.1/all", String.class);
-                    System.out.println(item.getHost());
-                    try {
-                        restTemplate.getForObject("https://api-dev.staging-cvalue.jp/api/v1/shops/charge/coin", String.class);
-                    } catch (Exception e) {
-                        System.out.println("oke" + item.getHost());
-                        System.out.println(e.getMessage());
-                    }
-
-
-                } catch (Exception e) {
-                   //e.printStackTrace();
-                }
+        int length = customers.size();
+        for (int i = 0; i < length; i++) {
+            ChargeCoinDTO chargeCoinDTO = new ChargeCoinDTO(customers.get(i).getPublicKey(), 10);
+            CompletableFuture.runAsync(()-> {
+                sendWithToken(chargeCoinDTO, shops.get(i));
             });
-
         }
+
+//        List<ProxyObject> proxyList = getListProxy();
+//
+//        for (ProxyObject item : proxyList) {
+//            CompletableFuture.runAsync(() -> {
+//                Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(item.getHost(), item.getPort()));
+//                requestFactory.setProxy(proxy);
+//                RestTemplate restTemplate = new RestTemplate(requestFactory);
+//                try {
+//                    restTemplate.getForObject("https://restcountries.com/v3.1/all", String.class);
+//                    System.out.println(item.getHost());
+//                    try {
+//                        restTemplate.getForObject("https://api-dev.staging-cvalue.jp/api/v1/shops/charge/coin", String.class);
+//                    } catch (Exception e) {
+//                        System.out.println("oke" + item.getHost());
+//                        System.out.println(e.getMessage());
+//                    }
+//
+//
+//                } catch (Exception e) {
+//                   e.printStackTrace();
+//                }
+//            });
+//
+//        }
 
         return "oke";
     }
