@@ -21,11 +21,8 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.net.InetSocketAddress;
-import java.net.Proxy;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,7 +40,7 @@ public class WordServiceImpl implements WordService {
     @Value("${oxford.translation_api}")
     private String apiTranslation;
 
-    private String local = "http://127.0.0.1:8000";
+    private String local = "https://3e1a-1-52-236-61.ap.ngrok.io";
 
     private String dev = "https://api-dev.staging-cvalue.jp";
 
@@ -89,12 +86,8 @@ public class WordServiceImpl implements WordService {
         headers.set("Authorization", "Bearer " + token);
 
         HttpEntity<String> entity = new HttpEntity<>(gson.toJson(chargeCoinDTO), headers);
-        try {
             return restTemplate.postForObject(local + "/api/v1/shops/charge/coin ", entity, String.class);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
+
     }
 
     String transferCoin(TransferCoinDTO transferCoinDTO, String token, RestTemplate restTemplate) {
@@ -153,6 +146,40 @@ public class WordServiceImpl implements WordService {
         return customerResponse.getData();
     }
 
+    private void chargeCoin(List<Customer> customers, List<String> shops) throws ExecutionException, InterruptedException {
+        RestTemplate restTemplate = new RestTemplate();
+        ExecutorService executor = Executors.newFixedThreadPool(100);
+        int length = customers.size();
+        List<Future> futures = new ArrayList<>();
+        for (int i = 0; i < length; i++) {
+            final String shopToken = shops.get(i);
+            ChargeCoinDTO chargeCoinDTO = new ChargeCoinDTO(customers.get(i).getPublicKey(), 5);
+            Future<Long> future = executor.submit(() -> {
+                try {
+                    long startTime = System.nanoTime();
+                    sendWithToken(chargeCoinDTO, shopToken, null);
+                    long endTime = System.nanoTime();
+                    return (endTime - startTime) / 1000000;
+                } catch(Exception e) {
+                    return null;
+                }
+            });
+            futures.add(future);
+        }
+        int total = 0;
+        for (Future future : futures) {
+            Object time = future.get();
+            if (time != null) {
+                total++;
+            }
+            System.out.println(time);
+        }
+        System.out.println(total);
+
+        executor.shutdown();
+
+    }
+
     public String checkProxy() throws ExecutionException, InterruptedException {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(10000);
@@ -161,38 +188,40 @@ public class WordServiceImpl implements WordService {
         List<Customer> customers = getListCustomerByName();
 
         List<String> shops = getListShop();
-        int length = customers.size();
-        int total = 0;
-        for (int i = 0; i < length; i++) {
+        chargeCoin(customers, shops);
 
-            final String shopToken = shops.get(i);
-            final int index = i;
-        //    CompletableFuture<Long> charge =
-                    CompletableFuture.supplyAsync(() -> {
-                TransferCoinDTO transferCoinDTO = null;
-                Customer sender = null;
-                if (index < 99) {
-                    sender = customers.get(index);
-                    transferCoinDTO = new TransferCoinDTO(customers.get(index).getCoinId(), customers.get(index + 1).getPublicKey());
-                } else {
-                    sender = customers.get(99);
-                    transferCoinDTO = new TransferCoinDTO(customers.get(99).getCoinId(), customers.get(0).getPublicKey());
-                }
-                long startTime = System.nanoTime();
-                if (!transferCoinDTO.getCoin_wallets().get(0).getId().isEmpty()) {
-                    transferCoin(transferCoinDTO, sender.getToken(), null);
-                }
-                long endTime = System.nanoTime();
-                return endTime - startTime;
-            }).thenApply(value -> {
-                System.out.println(value / 1000000);
-                return 0;
-            });
-//            total += charge.get() / 1000000;
-//            System.out.println(charge.get() / 1000000 + 's');
-        }
-
-        System.out.println("Trung binh: " + (double) total / 100);
+//        int length = customers.size();
+//        int total = 0;
+//        for (int i = 0; i < length; i++) {
+//
+//            final String shopToken = shops.get(i);
+//            final int index = i;
+//        //    CompletableFuture<Long> charge =
+//                    CompletableFuture.supplyAsync(() -> {
+//                TransferCoinDTO transferCoinDTO = null;
+//                Customer sender = null;
+//                if (index < 99) {
+//                    sender = customers.get(index);
+//                    transferCoinDTO = new TransferCoinDTO(customers.get(index).getCoinId(), customers.get(index + 1).getPublicKey());
+//                } else {
+//                    sender = customers.get(99);
+//                    transferCoinDTO = new TransferCoinDTO(customers.get(99).getCoinId(), customers.get(0).getPublicKey());
+//                }
+//                long startTime = System.nanoTime();
+//                if (!transferCoinDTO.getCoin_wallets().get(0).getId().isEmpty()) {
+//                    transferCoin(transferCoinDTO, sender.getToken(), null);
+//                }
+//                long endTime = System.nanoTime();
+//                return endTime - startTime;
+//            }).thenApply(value -> {
+//                System.out.println(value / 1000000);
+//                return 0;
+//            });
+////            total += charge.get() / 1000000;
+////            System.out.println(charge.get() / 1000000 + 's');
+//        }
+//
+//        System.out.println("Trung binh: " + (double) total / 100);
 
 
 //        List<ProxyObject> proxyList = getListProxy();
