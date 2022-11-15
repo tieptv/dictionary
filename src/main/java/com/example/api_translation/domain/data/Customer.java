@@ -12,4 +12,7 @@ public class Customer implements Serializable {
 
     @JsonProperty("publicKey")
     private String publicKey;
+
+    @JsonProperty("coin_id")
+    private String coinId;
 }

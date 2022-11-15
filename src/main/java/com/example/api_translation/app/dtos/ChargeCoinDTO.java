@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 public class ChargeCoinDTO {
 
     @JsonProperty("address_wallet_customer")
-    private String publicKey;
+    private String address_wallet_customer;
 
     private Integer amount;
 
