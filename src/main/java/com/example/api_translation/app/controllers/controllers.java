@@ -22,8 +22,13 @@ public class controllers {
         return wordService.getWord(sourceLang, targetLang,  word);
     }
 
-    @GetMapping("/proxy")
-    public String check() throws ExecutionException, InterruptedException {
-        return wordService.checkProxy();
+    @GetMapping("/performance/charge")
+    public String charge(@RequestParam("num") int num) throws ExecutionException, InterruptedException {
+        return wordService.charge(num);
+    }
+
+    @GetMapping("/performance/transfer")
+    public String transfer(@RequestParam("num") int num) throws ExecutionException, InterruptedException {
+        return wordService.transfer(num);
     }
 }

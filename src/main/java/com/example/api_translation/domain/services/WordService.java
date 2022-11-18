@@ -7,5 +7,7 @@ import java.util.concurrent.ExecutionException;
 public interface WordService {
     WordResponse getWord(String sourceLang, String targetLang, String word);
 
-    String checkProxy() throws ExecutionException, InterruptedException;
+    String charge(int num) throws ExecutionException, InterruptedException;
+
+    String transfer(int num) throws ExecutionException, InterruptedException;
 }

@@ -40,7 +40,7 @@ public class WordServiceImpl implements WordService {
     @Value("${oxford.translation_api}")
     private String apiTranslation;
 
-    private String local = "https://3e1a-1-52-236-61.ap.ngrok.io";
+    private String local = "http://localhost:8000";
 
     private String dev = "https://api-dev.staging-cvalue.jp";
 
@@ -86,7 +86,7 @@ public class WordServiceImpl implements WordService {
         headers.set("Authorization", "Bearer " + token);
 
         HttpEntity<String> entity = new HttpEntity<>(gson.toJson(chargeCoinDTO), headers);
-            return restTemplate.postForObject(local + "/api/v1/shops/charge/coin ", entity, String.class);
+        return restTemplate.postForObject(local + "/api/v1/shops/charge/coin ", entity, String.class);
 
     }
 
@@ -118,10 +118,10 @@ public class WordServiceImpl implements WordService {
         }).collect(Collectors.toList());
     }
 
-    private List<Customer> getListCustomerByName() {
+    private List<Customer> getListCustomerByName(int number) {
         RestTemplate restTemplate = new RestTemplate();
         List<String> customerNames = new ArrayList<>();
-        for (int i = 1; i <= 100; i++) {
+        for (int i = 1; i <= number; i++) {
             customerNames.add("customer" + i);
         }
         Map<String, Object> mapBody = new HashMap<>();
@@ -132,10 +132,10 @@ public class WordServiceImpl implements WordService {
         return customerResponse.getData();
     }
 
-    private List<String> getListShop() {
+    private List<String> getListShop(int number) {
         RestTemplate restTemplate = new RestTemplate();
         List<String> customerNames = new ArrayList<>();
-        for (int i = 1; i <= 100; i++) {
+        for (int i = 1; i <= number; i++) {
             customerNames.add("store" + i);
         }
         Map<String, Object> mapBody = new HashMap<>();
@@ -148,7 +148,7 @@ public class WordServiceImpl implements WordService {
 
     private void chargeCoin(List<Customer> customers, List<String> shops) throws ExecutionException, InterruptedException {
         RestTemplate restTemplate = new RestTemplate();
-        ExecutorService executor = Executors.newFixedThreadPool(100);
+        ExecutorService executor = Executors.newFixedThreadPool(customers.size());
         int length = customers.size();
         List<Future> futures = new ArrayList<>();
         for (int i = 0; i < length; i++) {
@@ -160,97 +160,111 @@ public class WordServiceImpl implements WordService {
                     sendWithToken(chargeCoinDTO, shopToken, null);
                     long endTime = System.nanoTime();
                     return (endTime - startTime) / 1000000;
-                } catch(Exception e) {
+                } catch (Exception e) {
                     return null;
                 }
             });
             futures.add(future);
         }
-        int total = 0;
+        int total = 0, successRequest = 0;
+        double max = 0, min = 30000;
         for (Future future : futures) {
-            Object time = future.get();
+            Double time = Double.valueOf(future.get().toString());
             if (time != null) {
                 total++;
+                if (time >= max) {
+                    max = time;
+                }
+                if (time <= min) {
+                    min = time;
+                }
+                if (time < 30000) {
+                    successRequest++;
+                }
             }
             System.out.println(time);
         }
-        System.out.println(total);
+        System.out.println("Số request hoàn tất: " + total);
+        System.out.println("Số request thành công: " + successRequest);
+        System.out.println("Max: " + max);
+        System.out.println("Min: " + min);
 
         executor.shutdown();
 
     }
 
-    public String checkProxy() throws ExecutionException, InterruptedException {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(10000);
-        requestFactory.setReadTimeout(10000);
+    private void transferCoin(List<Customer> customers) throws ExecutionException, InterruptedException {
+        RestTemplate restTemplate = new RestTemplate();
+        ExecutorService executor = Executors.newFixedThreadPool(customers.size());
+        int length = customers.size();
+        List<Future> futures = new ArrayList<>();
+        for (int i = 0; i < length; i++) {
+            final int index = i;
+            Future<Long> future = executor.submit(() -> {
+                try {
+                    TransferCoinDTO transferCoinDTO = null;
+                Customer sender = null;
+                if (index < length - 1) {
+                    sender = customers.get(index);
+                    transferCoinDTO = new TransferCoinDTO(customers.get(index).getCoinId(), customers.get(index + 1).getPublicKey());
+                } else {
+                    sender = customers.get(length - 1);
+                    transferCoinDTO = new TransferCoinDTO(customers.get(length -1).getCoinId(), customers.get(0).getPublicKey());
+                }
+                long startTime = System.nanoTime();
+                if (!transferCoinDTO.getCoin_wallets().get(0).getId().isEmpty()) {
+                    transferCoin(transferCoinDTO, sender.getToken(), null);
+                }
+                long endTime = System.nanoTime();
+                return endTime - startTime;
+                } catch (Exception e) {
+                    return null;
+                }
+            });
+            futures.add(future);
+        }
+        int total = 0, successRequest = 0;
+        double max = 0, min = 30000;
+        for (Future future : futures) {
+            Double time = Double.valueOf(future.get().toString());
+            if (time != null) {
+                total++;
+                if (time >= max) {
+                    max = time;
+                }
+                if (time <= min) {
+                    min = time;
+                }
+                if (time < 30000) {
+                    successRequest++;
+                }
+            }
+            System.out.println(time);
+        }
+        System.out.println("Số request hoàn tất: " + total);
+        System.out.println("Số request thành công: " + successRequest);
+        System.out.println("Max: " + max);
+        System.out.println("Min: " + min);
 
-        List<Customer> customers = getListCustomerByName();
+        executor.shutdown();
 
-        List<String> shops = getListShop();
+    }
+
+    public String charge(int num) throws ExecutionException, InterruptedException {
+
+        List<Customer> customers = getListCustomerByName(num);
+        System.out.println("-------------Charge coin performance-------------");
+
+        List<String> shops = getListShop(num);
         chargeCoin(customers, shops);
 
-//        int length = customers.size();
-//        int total = 0;
-//        for (int i = 0; i < length; i++) {
-//
-//            final String shopToken = shops.get(i);
-//            final int index = i;
-//        //    CompletableFuture<Long> charge =
-//                    CompletableFuture.supplyAsync(() -> {
-//                TransferCoinDTO transferCoinDTO = null;
-//                Customer sender = null;
-//                if (index < 99) {
-//                    sender = customers.get(index);
-//                    transferCoinDTO = new TransferCoinDTO(customers.get(index).getCoinId(), customers.get(index + 1).getPublicKey());
-//                } else {
-//                    sender = customers.get(99);
-//                    transferCoinDTO = new TransferCoinDTO(customers.get(99).getCoinId(), customers.get(0).getPublicKey());
-//                }
-//                long startTime = System.nanoTime();
-//                if (!transferCoinDTO.getCoin_wallets().get(0).getId().isEmpty()) {
-//                    transferCoin(transferCoinDTO, sender.getToken(), null);
-//                }
-//                long endTime = System.nanoTime();
-//                return endTime - startTime;
-//            }).thenApply(value -> {
-//                System.out.println(value / 1000000);
-//                return 0;
-//            });
-////            total += charge.get() / 1000000;
-////            System.out.println(charge.get() / 1000000 + 's');
-//        }
-//
-//        System.out.println("Trung binh: " + (double) total / 100);
+        return "oke";
+    }
 
-
-//        List<ProxyObject> proxyList = getListProxy();
-//
-//        for (int i = 0; i < length; i++) {
-//            int index = i % 100;
-//
-//            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyList.get(i).getHost(), proxyList.get(i).getPort()));
-//            requestFactory.setProxy(proxy);
-//            RestTemplate restTemplate = new RestTemplate(requestFactory);
-//            try {
-//                ChargeCoinDTO chargeCoinDTO = new ChargeCoinDTO(customers.get(index).getPublicKey(), 5);
-//                final String shopToken = shops.get(index);
-//                CompletableFuture.supplyAsync(() -> {
-//                    long startTime = System.nanoTime();
-//                    sendWithToken(chargeCoinDTO, shopToken, restTemplate);
-//                    long endTime = System.nanoTime();
-//                    return endTime - startTime;
-//                }).thenApply(value -> {
-//                    System.out.println(value/1000000);
-//                    return 0;
-//                });
-//
-//
-//            } catch (Exception e) {
-//                e.printStackTrace();
-//            }
-//
-//        }
+    public String transfer(int num) throws ExecutionException, InterruptedException {
+        List<Customer> customers = getListCustomerByName(num);
+        System.out.println("-----------Transfer coin performance---------------");
+        transferCoin(customers);
 
         return "oke";
     }
