@@ -90,7 +90,7 @@ public class WordServiceImpl implements WordService {
 
     }
 
-    String transferCoin(TransferCoinDTO transferCoinDTO, String token, RestTemplate restTemplate) {
+    String transferCoin(TransferCoinDTO transferCoinDTO, String token, RestTemplate restTemplate, int index) {
         Gson gson = new Gson();
         if (restTemplate == null) {
             restTemplate = new RestTemplate();
@@ -104,6 +104,7 @@ public class WordServiceImpl implements WordService {
             return restTemplate.postForObject(local + "/api/v1/customers/transfer/coin", entity, String.class);
         } catch (Exception e) {
             e.printStackTrace();
+            System.out.println(index);
             return null;
         }
     }
@@ -157,7 +158,8 @@ public class WordServiceImpl implements WordService {
             Future<Long> future = executor.submit(() -> {
                 try {
                     long startTime = System.nanoTime();
-                    sendWithToken(chargeCoinDTO, shopToken, null);
+                    String result = sendWithToken(chargeCoinDTO, shopToken, null);
+                    System.out.println(result);
                     long endTime = System.nanoTime();
                     return (endTime - startTime) / 1000000;
                 } catch (Exception e) {
@@ -213,10 +215,10 @@ public class WordServiceImpl implements WordService {
                 }
                 long startTime = System.nanoTime();
                 if (!transferCoinDTO.getCoin_wallets().get(0).getId().isEmpty()) {
-                    transferCoin(transferCoinDTO, sender.getToken(), null);
+                    transferCoin(transferCoinDTO, sender.getToken(), null, index);
                 }
                 long endTime = System.nanoTime();
-                return endTime - startTime;
+                return (endTime - startTime)/ 1000000;
                 } catch (Exception e) {
                     return null;
                 }
